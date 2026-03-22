@@ -20,7 +20,13 @@ const TopBar = ({ timeLabel, status }: TopBarProps) => {
             Live Interview
           </Text>
 
-          <Text color="#93c5fd" fontWeight="600">
+          <Text
+            color="#f8fafc"
+            fontSize={22}
+            fontWeight="700"
+            letterSpacing={2}
+            fontVariant={["tabular-nums"]}
+          >
             {timeLabel}
           </Text>
         </XStack>
