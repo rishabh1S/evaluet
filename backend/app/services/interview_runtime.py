@@ -99,6 +99,12 @@ async def stream_llm_response(
         async for audio, clean_text in dg.text_to_speech_stream(ai_stream):
             if clean_text:
                 full_reply += clean_text + " "
+                await websocket.send_text(json.dumps({
+                    "type": "transcript",
+                    "role": "assistant",
+                    "content": full_reply.strip(),
+                    "partial": True,
+                }))
             if audio:
                 await websocket.send_bytes(audio)
     finally:

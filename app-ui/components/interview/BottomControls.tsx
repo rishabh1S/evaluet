@@ -23,8 +23,6 @@ const BottomControls = ({
 }: BottomControlsProps) => {
   return (
     <XStack
-      position="absolute"
-      bottom="$2.5"
       alignSelf="center"
       bg="rgba(17,24,39,0.9)"
       borderColor="rgba(255,255,255,0.08)"
