@@ -11,8 +11,8 @@ def build_report_prompt(session: InterviewSession, transcript_text: str, evaluat
     ═══════════════════════════════════════════════════════════
     INTERVIEW CONTEXT
     ═══════════════════════════════════════════════════════════
-    Role: {session.candidate_level} 
-    Level: {session.job_role} position.
+    Role: {session.job_role}
+    Level: {session.candidate_level}
 
     ═══════════════════════════════════════════════════════════
     TRANSCRIPT (VERBATIM)
@@ -28,30 +28,42 @@ def build_report_prompt(session: InterviewSession, transcript_text: str, evaluat
     OUTPUT REQUIREMENTS (CRITICAL)
     ═══════════════════════════════════════════════════════════
     - Return ONLY a valid JSON object.
-    - DO NOT escape single quotes (e.g., use "candidate's" NOT "candidate\'s").
-    - Do NOT insert standalone punctuation or filler lines (e.g., ".", "-", or empty bullet points).
-    - Paragraph separation MUST be done using a single "\n\n" only.
-    - Never add content solely to preserve formatting.
+    - DO NOT escape single quotes (e.g., use "candidate's" NOT "candidate\\'s").
+    - Do NOT insert standalone punctuation or filler lines.
     - Use double quotes for JSON keys and string values.
     - NO explanations outside JSON.
 
     ═══════════════════════════════════════════════════════════
-    REPORT STRUCTURE (MANDATORY):
+    SCORING CRITERIA
     ═══════════════════════════════════════════════════════════
-    - Use ONLY the following sections in this exact order:
-    1. Candidate Summary
-    2. Technical Evaluation
-    3. Strengths (bullet points only)
-    4. Weaknesses (bullet points only)
-    5. Hiring Decision (Strong Hire, Hire, Maybe, No Hire)
-    6. Final Recommendation (detailed reasoning for hiring decision)
-    - Do NOT add extra sections
-    - Do NOT add filler lines
+    Rate each skill on a scale of 0 to 100:
+    - technical_knowledge: Depth and accuracy of domain/technical answers.
+    - communication: Clarity, structure, and articulation of responses.
+    - problem_solving: Analytical thinking, approach to challenges, and reasoning.
+    - confidence: Poise, decisiveness, and composure under pressure.
 
+    ═══════════════════════════════════════════════════════════
+    REPORT FIELDS (MANDATORY)
+    ═══════════════════════════════════════════════════════════
+    1. skill_scores: Individual scores (0-100) for each of the 4 skills above.
+    2. strengths: 2-4 bullet points highlighting what the candidate did well.
+    3. improvements: 2-4 bullet points on areas the candidate should work on.
+    4. hiring_decision: Exactly one of "Strong Hire", "Hire", "Maybe", "No Hire".
+    5. final_verdict: A 2-4 sentence summary explaining the hiring decision with specific evidence from the interview.
+
+    Do NOT add extra fields. Do NOT add filler lines.
 
     JSON STRUCTURE (MANDATORY):
     {{
-    "score": <integer from 1 to 10>,
-    "report_markdown": "## Candidate Summary\n...\n\n## Technical Evaluation\n...\n\n## Strengths\n- ...\n\n## Weaknesses\n- ...\n\n## Hiring Decision\n...\n\n## Final Recommendation\n..."
+      "skill_scores": {{
+        "technical_knowledge": <integer 0-100>,
+        "communication": <integer 0-100>,
+        "problem_solving": <integer 0-100>,
+        "confidence": <integer 0-100>
+      }},
+      "strengths": ["<point 1>", "<point 2>"],
+      "improvements": ["<point 1>", "<point 2>"],
+      "hiring_decision": "<Strong Hire | Hire | Maybe | No Hire>",
+      "final_verdict": "<2-4 sentence summary>"
     }}
     """

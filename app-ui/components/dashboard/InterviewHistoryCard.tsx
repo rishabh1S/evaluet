@@ -53,7 +53,11 @@ export function InterviewHistoryCard({ item }: Props) {
       borderRadius={16}
       padding={16}
       gap={10}
-      onPress={() => router.push("/(app)/report")}
+      onPress={() =>
+        item.status === "COMPLETED"
+          ? router.push(`/(app)/report/${item.session_id}`)
+          : undefined
+      }
       cursor="pointer"
       pressStyle={{ opacity: 0.75 }}
     >

@@ -1,20 +1,40 @@
 import uuid
+import os
 from datetime import datetime, timezone
 from typing import List
 from fastapi import APIRouter, UploadFile, File, Form, Depends, HTTPException
+from fastapi.responses import FileResponse
 from sqlalchemy import desc, func
 from sqlalchemy.orm import Session
 from app.db import get_db
 from app.models.interview_sessions import InterviewSession
 from app.models.interview_reports import InterviewReport
 from app.services.pdf_service import extract_text_from_pdf
+from app.services.report_pdf_service import REPORTS_DIR
 from app.models.users import User
 from app.auth.dependencies import get_current_user_id
 from app.models.interviewer_character import InterviewerCharacter
 from app.models.dto.interviewer import InterviewerPublicDTO
 from app.prompts.interviewer import build_system_prompt
+from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
+from jose import jwt, JWTError
 
 router = APIRouter()
+
+_optional_bearer = HTTPBearer(auto_error=False)
+
+def _optional_user_id(
+    creds: HTTPAuthorizationCredentials | None = Depends(_optional_bearer),
+) -> str | None:
+    """Extract user_id from Bearer token if present, otherwise return None."""
+    if not creds:
+        return None
+    try:
+        from app.config import settings as app_settings
+        payload = jwt.decode(creds.credentials, app_settings.JWT_SECRET, algorithms=["HS256"])
+        return payload["sub"]
+    except JWTError:
+        return None
 
 @router.get("/all_interviewers", response_model=List[InterviewerPublicDTO])
 async def get_all_interviewers(db: Session = Depends(get_db)):
@@ -219,3 +239,111 @@ def get_user_stats(
         "practice_total_hours": total_hours,
         "practice_month_hours": month_hours,
     }
+
+
+@router.get("/report/{session_id}")
+async def get_report(
+    session_id: str,
+    user_id: str = Depends(get_current_user_id),
+    db: Session = Depends(get_db),
+):
+    session = (
+        db.query(
+            InterviewSession,
+            InterviewerCharacter.name.label("interviewer_name"),
+        )
+        .join(
+            InterviewerCharacter,
+            InterviewSession.interviewer_id == InterviewerCharacter.id,
+            isouter=True,
+        )
+        .filter(
+            InterviewSession.session_id == session_id,
+            InterviewSession.user_id == user_id,
+        )
+        .first()
+    )
+
+    if not session:
+        raise HTTPException(404, "Session not found")
+
+    interview_session = session[0]
+    interviewer_name = session.interviewer_name
+
+    report = db.query(InterviewReport).filter(
+        InterviewReport.session_id == session_id
+    ).first()
+
+    if not report:
+        raise HTTPException(404, "Report not yet generated")
+
+    # Build transcript for display
+    transcript = []
+    if isinstance(interview_session.transcript, list):
+        for msg in interview_session.transcript:
+            role = msg.get("role")
+            content = msg.get("content", "")
+            if role in ("user", "assistant") and content.strip():
+                transcript.append({
+                    "role": "ai" if role == "assistant" else "user",
+                    "text": content.strip(),
+                })
+
+    # Check if PDF exists on disk
+    pdf_file = os.path.join(REPORTS_DIR, f"report_{session_id}.pdf")
+    has_pdf = os.path.exists(pdf_file)
+
+    return {
+        "session_id": session_id,
+        "score": report.score,
+        "skill_scores": report.skill_scores or {},
+        "strengths": report.strengths or [],
+        "improvements": report.improvements or [],
+        "hiring_decision": report.hiring_decision,
+        "final_verdict": report.final_verdict,
+        "job_role": interview_session.job_role,
+        "candidate_level": interview_session.candidate_level,
+        "created_at": interview_session.created_at.isoformat() if interview_session.created_at else None,
+        "interviewer_name": interviewer_name,
+        "transcript": transcript,
+        "has_pdf": has_pdf,
+    }
+
+
+@router.get("/report/{session_id}/pdf")
+async def download_report_pdf(
+    session_id: str,
+    token: str | None = None,
+    user_id: str | None = Depends(_optional_user_id),
+    db: Session = Depends(get_db),
+):
+    # Support token as query param for mobile deep links (Linking.openURL can't set headers)
+    if not user_id and token:
+        from jose import jwt, JWTError
+        from app.config import settings as app_settings
+        try:
+            payload = jwt.decode(token, app_settings.JWT_SECRET, algorithms=["HS256"])
+            user_id = payload["sub"]
+        except JWTError:
+            raise HTTPException(401, "Invalid token")
+
+    if not user_id:
+        raise HTTPException(401, "Authentication required")
+
+    session = db.query(InterviewSession).filter(
+        InterviewSession.session_id == session_id,
+        InterviewSession.user_id == user_id,
+    ).first()
+
+    if not session:
+        raise HTTPException(404, "Session not found")
+
+    pdf_file = os.path.join(REPORTS_DIR, f"report_{session_id}.pdf")
+    if not os.path.exists(pdf_file):
+        raise HTTPException(404, "PDF not available")
+
+    return FileResponse(
+        pdf_file,
+        media_type="application/pdf",
+        filename=f"evaluet_report_{session_id[:8]}.pdf",
+    )

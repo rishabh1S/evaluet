@@ -16,3 +16,4 @@ deepgram-sdk
 groq
 websockets
 httpx            # Async HTTP client
+fpdf2            # PDF report generation
