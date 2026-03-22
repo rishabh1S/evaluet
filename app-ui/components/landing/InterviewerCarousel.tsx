@@ -48,7 +48,7 @@ export function InterviewerCarousel({
               bg={
                 isSelected ? "rgba(37,99,235,0.25)" : "rgba(255,255,255,0.05)"
               }
-              borderColor={isSelected ? "#2563EB" : "rgba(255,255,255,0.15)"}
+              borderColor={isSelected ? "#4F52D9" : "rgba(255,255,255,0.15)"}
               borderWidth={1}
               pressStyle={{ scale: 0.97 }}
             >

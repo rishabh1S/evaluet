@@ -1,162 +1,330 @@
-import { YStack, Button, H2, Text, ScrollView, XStack } from "tamagui";
-import * as DocumentPicker from "expo-document-picker";
+import { YStack, Button, Text, ScrollView, XStack, Separator } from "tamagui";
 import { useRouter } from "expo-router";
-import { useEffect, useState } from "react";
-import { API_BASE } from "../../lib/env";
 import { LinearGradient } from "expo-linear-gradient";
-import { Play } from "@tamagui/lucide-icons";
-import { authFetch } from "lib/auth";
-import { useInterviewers } from "lib/hooks/useInterviewers";
 import {
-  InterviewerCarousel,
-  InterviewerInfoSheet,
-  InterviewForm,
-} from "components/landing";
-import { Interviewer, useInterviewerStore } from "lib/store/interviewerStore";
+  CheckCircle,
+  Clock,
+  XCircle,
+  TrendingUp,
+  Timer,
+  ShieldPlus,
+} from "@tamagui/lucide-icons";
+import { useProfile } from "lib/hooks/useProfile";
+import { useInterviewHistory } from "lib/hooks/useInterviewHistory";
+import { SafeAreaView } from "react-native-safe-area-context";
+
+/* ── Helpers ── */
+
+function getInitials(name: string) {
+  return name
+    .split(" ")
+    .map((w) => w[0])
+    .join("")
+    .toUpperCase()
+    .slice(0, 2);
+}
+
+function formatRelativeDate(isoDate: string | null): string {
+  if (!isoDate) return "";
+  const diff = Date.now() - new Date(isoDate).getTime();
+  const days = Math.floor(diff / 86_400_000);
+  if (days === 0) return "Today";
+  if (days === 1) return "Yesterday";
+  if (days < 7) return `${days}d ago`;
+  if (days < 30) return `${Math.floor(days / 7)}w ago`;
+  return `${Math.floor(days / 30)}mo ago`;
+}
+
+const STATUS_CONFIG = {
+  COMPLETED: {
+    label: "COMPLETED",
+    color: "#22c55e",
+    bg: "rgba(34,197,94,0.12)",
+    icon: CheckCircle,
+  },
+  ACTIVE: {
+    label: "IN PROGRESS",
+    color: "#fbbf24",
+    bg: "rgba(251,191,36,0.12)",
+    icon: Clock,
+  },
+  FAILED: {
+    label: "FAILED",
+    color: "#f87171",
+    bg: "rgba(239,68,68,0.12)",
+    icon: XCircle,
+  },
+} as const;
+
+/* ── Screen ── */
 
 export default function IndexScreen() {
-  const [jobRole, setJobRole] = useState("Software Engineer");
-  const [jobLevel, setJobLevel] = useState("Mid-Level");
-  const [jobDesc, setJobDesc] = useState(
-    "Must know Java, Springboot, Microservices."
-  );
-  const [resume, setResume] = useState<any>(null);
-  const [loading, setLoading] = useState(false);
-  const [selectedInterviewer, setSelectedInterviewer] =
-    useState<Interviewer | null>(null);
   const router = useRouter();
-  const {
-    data: interviewers = [],
-    isLoading: interviewersLoading,
-    isError: interviewersError,
-  } = useInterviewers();
-  const [infoInterviewer, setInfoInterviewer] = useState<Interviewer | null>(
-    null
-  );
-  const setGlobalInterviewer = useInterviewerStore((s) => s.setInterviewer);
+  const { data: profile } = useProfile();
+  const { data: history = [] } = useInterviewHistory();
 
-  useEffect(() => {
-    if (!selectedInterviewer && interviewers.length > 0) {
-      setSelectedInterviewer(interviewers[0]);
-    }
-  }, [interviewers, selectedInterviewer]);
-
-  const pickResume = async () => {
-    const result = await DocumentPicker.getDocumentAsync({
-      type: "application/pdf",
-    });
-    if (!result.canceled) setResume(result.assets[0]);
-  };
-
-  const startInterview = async () => {
-    if (!jobRole || !jobLevel || !jobDesc || !resume || !selectedInterviewer) {
-      alert("Please fill all fields");
-      return;
-    }
-    setGlobalInterviewer(selectedInterviewer);
-    setLoading(true);
-    const form = new FormData();
-    form.append("resume", {
-      uri: resume.uri,
-      name: resume.name,
-      type: "application/pdf",
-    } as any);
-    form.append("job_role", jobRole);
-    form.append("job_level", jobLevel);
-    form.append("job_desc", jobDesc);
-    form.append("interviewer_id", selectedInterviewer.id);
-
-    try {
-      const res = await authFetch(`${API_BASE}/api/interview/init`, {
-        method: "POST",
-        body: form,
-      });
-      if (!res.ok) {
-        const text = await res.text();
-        throw new Error(text || `HTTP ${res.status}`);
-      }
-      const data = await res.json();
-      router.navigate(`/interview/${data.session_id}` as any);
-    } catch (err: any) {
-      console.error("Init interview failed:", err);
-      alert(err.message ?? "Network error");
-    } finally {
-      setLoading(false);
-    }
-  };
+  const firstName = profile?.name?.split(" ")[0] ?? "there";
+  const initials = profile?.name ? getInitials(profile.name) : "?";
 
   return (
     <LinearGradient
-      colors={["#0B1220", "#0F172A", "#111827"]}
+      colors={["#060b14", "#0B1220", "#0F172A"]}
       style={{ flex: 1 }}
     >
-      <ScrollView
-        flex={1}
-        contentContainerStyle={{ paddingBottom: 20 }}
-        showsVerticalScrollIndicator={false}
-      >
-        <YStack justify="center" px="$6" py="$8" gap="$5">
-          {/* Header */}
-          <YStack gap="$2" items="center">
-            <H2 text="center" fontWeight="500">
-              AI Interview Setup
-            </H2>
-            <Text text="center">Prepare for your next opportunity</Text>
+      <SafeAreaView style={{ flex: 1 }} edges={["top"]}>
+        <ScrollView
+          flex={1}
+          contentContainerStyle={{ paddingBottom: 48 }}
+          showsVerticalScrollIndicator={false}
+        >
+          {/* ── Header ── */}
+          <XStack
+            px={24}
+            pt={16}
+            pb={24}
+            alignItems="center"
+            justifyContent="space-between"
+            position="relative"
+          >
+            {/* Spacer to balance the right avatar */}
+            <YStack width={44} />
+
+            {/* Centered welcome text */}
+            <YStack alignItems="center" gap={3}>
+              <Text color="white" fontSize={22} fontWeight="800">
+                Welcome back, {firstName}
+              </Text>
+              <Text color="rgba(255,255,255,0.4)" fontSize={13}>
+                Ready for your next breakthrough?
+              </Text>
+            </YStack>
+
+            {/* Profile avatar (right) */}
+            <YStack
+              width={44}
+              height={44}
+              borderRadius={22}
+              backgroundColor="#6366F1"
+              alignItems="center"
+              justifyContent="center"
+              onPress={() => router.push("/(app)/profile")}
+              cursor="pointer"
+            >
+              <Text color="white" fontSize={15} fontWeight="700">
+                {initials}
+              </Text>
+            </YStack>
+          </XStack>
+
+          {/* ── Past Interviews ── */}
+          <YStack gap={14} mb={28}>
+            <XStack
+              px={24}
+              alignItems="center"
+              justifyContent="space-between"
+            >
+              <Text color="white" fontSize={18} fontWeight="700">
+                Past Interviews
+              </Text>
+              <Text
+                color="rgba(255,255,255,0.4)"
+                fontSize={11}
+                fontWeight="600"
+                letterSpacing={1}
+              >
+                VIEW ALL
+              </Text>
+            </XStack>
+
+            {history.length === 0 ? (
+              <Text
+                px={24}
+                color="rgba(255,255,255,0.25)"
+                fontSize={14}
+              >
+                No interviews yet — start your first session below.
+              </Text>
+            ) : (
+              <ScrollView
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                contentContainerStyle={{ paddingLeft: 24, paddingRight: 8, gap: 12 }}
+              >
+                {history.map((item) => {
+                  const cfg =
+                    STATUS_CONFIG[item.status] ?? STATUS_CONFIG.ACTIVE;
+                  const StatusIcon = cfg.icon;
+                  return (
+                    <YStack
+                      key={item.session_id}
+                      width={200}
+                      backgroundColor="rgba(255,255,255,0.05)"
+                      borderColor="rgba(255,255,255,0.08)"
+                      borderWidth={1}
+                      borderRadius={16}
+                      padding={16}
+                      gap={10}
+                    >
+                      {/* Status badge */}
+                      <XStack
+                        backgroundColor={cfg.bg}
+                        borderRadius={20}
+                        paddingHorizontal={10}
+                        paddingVertical={5}
+                        gap={6}
+                        alignItems="center"
+                        alignSelf="flex-start"
+                      >
+                        <StatusIcon size={10} color={cfg.color} />
+                        <Text
+                          color={cfg.color}
+                          fontSize={10}
+                          fontWeight="700"
+                          letterSpacing={0.8}
+                        >
+                          {cfg.label}
+                        </Text>
+                      </XStack>
+
+                      <YStack gap={3}>
+                        <Text
+                          color="white"
+                          fontSize={15}
+                          fontWeight="700"
+                          numberOfLines={1}
+                        >
+                          {item.job_role}
+                        </Text>
+                        <Text color="rgba(255,255,255,0.45)" fontSize={13}>
+                          {item.candidate_level}
+                        </Text>
+                      </YStack>
+
+                      <XStack alignItems="center" justifyContent="space-between">
+                        <Text color="rgba(255,255,255,0.35)" fontSize={12}>
+                          {item.interviewer_name ?? ""}
+                        </Text>
+                        <Text color="rgba(255,255,255,0.3)" fontSize={12}>
+                          {formatRelativeDate(item.created_at)}
+                        </Text>
+                      </XStack>
+                    </YStack>
+                  );
+                })}
+              </ScrollView>
+            )}
           </YStack>
 
-          {/* Form Card */}
-          <InterviewForm
-            jobRole={jobRole}
-            setJobRole={setJobRole}
-            jobLevel={jobLevel}
-            setJobLevel={setJobLevel}
-            jobDesc={jobDesc}
-            setJobDesc={setJobDesc}
-            resume={resume}
-            onPickResume={pickResume}
-          >
-            <YStack gap="$3">
-              <XStack gap="$2" items="center">
+          {/* ── New Interview Card ── */}
+          <YStack px={24} mb={20}>
+            <YStack
+              backgroundColor="rgba(255,255,255,0.05)"
+              borderRadius={20}
+              borderWidth={1}
+              borderColor="rgba(255,255,255,0.08)"
+              padding={28}
+              alignItems="center"
+              gap={14}
+            >
+              {/* Icon */}
+              <YStack
+                width={72}
+                height={72}
+                borderRadius={20}
+                backgroundColor="#6366F1"
+                alignItems="center"
+                justifyContent="center"
+              >
+                <ShieldPlus size={34} color="white" />
+              </YStack>
+
+              <YStack alignItems="center" gap={8}>
+                <Text color="white" fontSize={24} fontWeight="800">
+                  New Interview
+                </Text>
                 <Text
-                  color="rgba(255,255,255,0.9)"
+                  color="rgba(255,255,255,0.45)"
                   fontSize={14}
-                  fontWeight="600"
+                  textAlign="center"
+                  lineHeight={22}
                 >
-                  Choose Interviewer
+                  Start a new session to refine your skills{"\n"}and master
+                  your career trajectory.
+                </Text>
+              </YStack>
+
+              <Button
+                onPress={() => router.push("/(app)/setup")}
+                width="100%"
+                height={54}
+                backgroundColor="#6366F1"
+                borderRadius={14}
+                pressStyle={{ backgroundColor: "#4F52D9" }}
+                mt={4}
+              >
+                <Text color="white" fontSize={16} fontWeight="700">
+                  Start a new session
+                </Text>
+              </Button>
+            </YStack>
+          </YStack>
+
+          {/* ── Stats Row ── */}
+          <XStack px={24} gap={12}>
+            {/* Score Avg */}
+            <YStack
+              flex={1}
+              backgroundColor="rgba(255,255,255,0.05)"
+              borderRadius={16}
+              borderWidth={1}
+              borderColor="rgba(255,255,255,0.08)"
+              padding={16}
+              gap={10}
+            >
+              <XStack justifyContent="space-between" alignItems="center">
+                <TrendingUp size={20} color="rgba(255,255,255,0.5)" />
+                <Text color="#22c55e" fontSize={12} fontWeight="600">
+                  +12%
                 </Text>
               </XStack>
-
-              <InterviewerCarousel
-                interviewers={interviewers}
-                selected={selectedInterviewer}
-                onSelect={setSelectedInterviewer}
-                onInfo={setInfoInterviewer}
-                loading={interviewersLoading}
-                error={interviewersError}
-              />
+              <YStack gap={3}>
+                <Text color="rgba(255,255,255,0.45)" fontSize={13}>
+                  Score Avg.
+                </Text>
+                <Text color="white" fontSize={28} fontWeight="800">
+                  8.4
+                </Text>
+              </YStack>
             </YStack>
-          </InterviewForm>
 
-          {/* Start Button */}
-          <Button
-            onPress={startInterview}
-            iconAfter={<Play size={22} color="white" fill="white" />}
-            height={58}
-            disabled={loading}
-            opacity={loading ? 0.7 : 1}
-            bg="#2563EB"
-            pressStyle={{ bg: "#1D4ED8", scale: 0.98 }}
-          >
-            <Text color="white" fontSize={17} fontWeight="700">
-              {loading ? "Starting..." : "Start Interview"}
-            </Text>
-          </Button>
-        </YStack>
-      </ScrollView>
-      <InterviewerInfoSheet
-        interviewer={infoInterviewer}
-        onClose={() => setInfoInterviewer(null)}
-      />
+            {/* Practice Time */}
+            <YStack
+              flex={1}
+              backgroundColor="rgba(255,255,255,0.05)"
+              borderRadius={16}
+              borderWidth={1}
+              borderColor="rgba(255,255,255,0.08)"
+              padding={16}
+              gap={10}
+            >
+              <XStack justifyContent="space-between" alignItems="center">
+                <Timer size={20} color="rgba(255,255,255,0.5)" />
+                <Text color="rgba(255,255,255,0.35)" fontSize={12}>
+                  12h
+                </Text>
+              </XStack>
+              <YStack gap={3}>
+                <Text color="rgba(255,255,255,0.45)" fontSize={13}>
+                  Practice Time
+                </Text>
+                <Text color="white" fontSize={28} fontWeight="800">
+                  24.5h
+                </Text>
+              </YStack>
+            </YStack>
+          </XStack>
+        </ScrollView>
+      </SafeAreaView>
     </LinearGradient>
   );
 }

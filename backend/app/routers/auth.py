@@ -3,6 +3,7 @@ from sqlalchemy.orm import Session
 from app.db import get_db
 from app.models.users import User
 from app.auth.security import hash_password, verify_password, create_access_token
+from app.auth.dependencies import get_current_user_id
 import uuid
 
 from app.models.dto.auth import LoginRequest, RegisterRequest
@@ -34,3 +35,10 @@ def login(payload: LoginRequest, db: Session = Depends(get_db)):
 
     token = create_access_token({"sub": user.user_id})
     return {"access_token": token}
+
+@router.get("/me")
+def get_me(user_id: str = Depends(get_current_user_id), db: Session = Depends(get_db)):
+    user = db.query(User).filter(User.user_id == user_id).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    return {"name": user.name, "email": user.email}
