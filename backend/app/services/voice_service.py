@@ -5,7 +5,6 @@ from typing import AsyncGenerator, Optional
 import numpy as np
 from deepgram import AsyncDeepgramClient
 from deepgram.core.events import EventType
-from deepgram.extensions.types.sockets import ListenV2SocketClientResponse
 
 from app.core.llm_sanitizer import sanitize_llm_output
 
@@ -84,7 +83,7 @@ class DeepgramService:
     # =========================
     #   FLUX EVENT HANDLER
     # =========================
-    def _on_message(self, message: ListenV2SocketClientResponse) -> None:
+    def _on_message(self, message) -> None:
         """
         Handle Flux Listen v2 messages and push final turns into transcript_queue.
 
