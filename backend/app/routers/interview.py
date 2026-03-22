@@ -1,10 +1,12 @@
 import uuid
+from datetime import datetime, timezone
 from typing import List
 from fastapi import APIRouter, UploadFile, File, Form, Depends, HTTPException
-from sqlalchemy import desc
+from sqlalchemy import desc, func
 from sqlalchemy.orm import Session
 from app.db import get_db
 from app.models.interview_sessions import InterviewSession
+from app.models.interview_reports import InterviewReport
 from app.services.pdf_service import extract_text_from_pdf
 from app.models.users import User
 from app.auth.dependencies import get_current_user_id
@@ -152,3 +154,68 @@ async def get_interview_history(
         }
         for s in sessions
     ]
+
+
+@router.get("/stats")
+def get_user_stats(
+    user_id: str = Depends(get_current_user_id),
+    db: Session = Depends(get_db),
+):
+    # ── User avg score ──
+    user_avg_row = (
+        db.query(func.avg(InterviewReport.score))
+        .join(InterviewSession, InterviewReport.session_id == InterviewSession.session_id)
+        .filter(InterviewSession.user_id == user_id)
+        .scalar()
+    )
+    user_avg = round(float(user_avg_row or 0), 1)
+
+    # ── Global avg score (all users) ──
+    global_avg_row = db.query(func.avg(InterviewReport.score)).scalar()
+    global_avg = float(global_avg_row or 0)
+
+    # ── Score delta % vs global ──
+    if global_avg > 0:
+        delta_pct = round(((user_avg - global_avg) / global_avg) * 100, 1)
+    else:
+        delta_pct = 0.0
+
+    # ── Practice time: lifetime total ──
+    total_secs = (
+        db.query(
+            func.sum(
+                func.extract("epoch", InterviewSession.ended_at - InterviewSession.created_at)
+            )
+        )
+        .filter(
+            InterviewSession.user_id == user_id,
+            InterviewSession.ended_at.isnot(None),
+        )
+        .scalar()
+    )
+    total_hours = round((total_secs or 0) / 3600, 1)
+
+    # ── Practice time: this calendar month ──
+    now = datetime.now(timezone.utc)
+    month_start = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+    month_secs = (
+        db.query(
+            func.sum(
+                func.extract("epoch", InterviewSession.ended_at - InterviewSession.created_at)
+            )
+        )
+        .filter(
+            InterviewSession.user_id == user_id,
+            InterviewSession.ended_at.isnot(None),
+            InterviewSession.created_at >= month_start,
+        )
+        .scalar()
+    )
+    month_hours = round((month_secs or 0) / 3600, 1)
+
+    return {
+        "score_avg": user_avg,
+        "score_delta_pct": delta_pct,
+        "practice_total_hours": total_hours,
+        "practice_month_hours": month_hours,
+    }
