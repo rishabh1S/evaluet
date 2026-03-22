@@ -52,6 +52,9 @@ export default function InterviewsScreen() {
                   borderRadius={16}
                   padding={16}
                   gap={10}
+                  onPress={() => router.push("/(app)/report")}
+                  cursor="pointer"
+                  pressStyle={{ opacity: 0.75 }}
                 >
                   <XStack alignItems="center" justifyContent="space-between">
                     <XStack

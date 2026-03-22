@@ -1,5 +1,6 @@
 import { XStack, YStack, Text } from "tamagui";
 import { CheckCircle, Clock, XCircle } from "@tamagui/lucide-icons";
+import { useRouter } from "expo-router";
 import type { InterviewHistoryItem } from "lib/hooks/useInterviewHistory";
 
 export const STATUS_CONFIG = {
@@ -39,6 +40,7 @@ type Props = {
 };
 
 export function InterviewHistoryCard({ item }: Props) {
+  const router = useRouter();
   const cfg = STATUS_CONFIG[item.status] ?? STATUS_CONFIG.ACTIVE;
   const StatusIcon = cfg.icon;
 
@@ -51,6 +53,9 @@ export function InterviewHistoryCard({ item }: Props) {
       borderRadius={16}
       padding={16}
       gap={10}
+      onPress={() => router.push("/(app)/report")}
+      cursor="pointer"
+      pressStyle={{ opacity: 0.75 }}
     >
       <XStack
         backgroundColor={cfg.bg}
