@@ -1,8 +1,7 @@
 import { useLocalSearchParams, useRouter } from "expo-router";
-import { YStack } from "tamagui";
+import { Button, Text, YStack } from "tamagui";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useEffect, useRef, useState } from "react";
-import { StyleSheet, View, Pressable, Text } from "react-native";
 import { useKeepAwake } from "expo-keep-awake";
 import { LinearGradient } from "expo-linear-gradient";
 import { WS_BASE } from "../../../lib/env";
@@ -12,7 +11,7 @@ import {
   useSharedAudioRecorder,
 } from "@siteed/expo-audio-studio";
 import { useInterviewerStore } from "lib/store/interviewerStore";
-import { BottomControls, TopBar, VoiceTranscript } from "components/interview";
+import { BottomControls, TopBar } from "components/interview";
 import { mergeUint8Arrays, pcmToWav } from "lib/utils/audioUtils";
 import {
   InterviewerVideoStage,
@@ -35,6 +34,7 @@ function InterviewScreen() {
   const router = useRouter();
   const [currentSentence, setCurrentSentence] = useState("");
   const [speakerOn, setSpeakerOn] = useState(true);
+  const speakerOnRef = useRef(true);
   const [isCompleted, setIsCompleted] = useState(false);
   const currentSound = useRef<Audio.Sound | null>(null);
   const { sessionId } = useLocalSearchParams();
@@ -43,6 +43,7 @@ function InterviewScreen() {
   const [seconds, setSeconds] = useState(0);
   const [isRecording, setIsRecording] = useState(false);
   const isRecordingRef = useRef(false);
+  const [timerActive, setTimerActive] = useState(false);
   const micStartedRef = useRef(false);
   const interviewEndedRef = useRef(false);
   const audioBufferRef = useRef<Uint8Array[]>([]);
@@ -67,13 +68,10 @@ function InterviewScreen() {
   const { startRecording, stopRecording } = useSharedAudioRecorder();
 
   useEffect(() => {
-    if (!isRecording || interviewEndedRef.current) return;
-    const t = setInterval(() => {
-      setSeconds((s) => s + 1);
-    }, 1000);
-
+    if (!timerActive) return;
+    const t = setInterval(() => setSeconds((s) => s + 1), 1000);
     return () => clearInterval(t);
-  }, [isRecording]);
+  }, [timerActive]);
 
   const timeLabel = `${Math.floor(seconds / 60)
     .toString()
@@ -85,6 +83,7 @@ function InterviewScreen() {
 
     ws.current.onopen = async () => {
       setStatus("Connected");
+      setTimerActive(true);
 
       if (!micStartedRef.current) {
         try {
@@ -106,6 +105,7 @@ function InterviewScreen() {
 
         if (msg.type === "control" && msg.action === "END_INTERVIEW") {
           interviewEndedRef.current = true;
+          setTimerActive(false);
           setStatus("Interview completed");
           clearInterviewer();
           stopRecordingSafe();
@@ -204,7 +204,7 @@ function InterviewScreen() {
     resolve: () => void
   ) {
     try {
-      if (!speakerOn) {
+      if (!speakerOnRef.current) {
         assistantSpeakingRef.current = false;
         resolve();
         return;
@@ -244,8 +244,22 @@ function InterviewScreen() {
     }
   }
 
+  function toggleSpeaker() {
+    const next = !speakerOnRef.current;
+    speakerOnRef.current = next;
+    setSpeakerOn(next);
+
+    if (!next && currentSound.current) {
+      // Silence the active chunk immediately without breaking the promise chain.
+      // stopAsync/unloadAsync would prevent didJustFinish from firing, permanently
+      // locking playLockRef and blocking all future audio.
+      currentSound.current.setVolumeAsync(0).catch(() => {});
+    }
+  }
+
   function endInterview() {
     interviewEndedRef.current = true;
+    setTimerActive(false);
     clearInterviewer();
     ws.current?.send(
       JSON.stringify({ type: "control", action: "END_INTERVIEW" })
@@ -261,19 +275,15 @@ function InterviewScreen() {
       end={{ x: 1, y: 0.8 }}
       style={{ flex: 1 }}
     >
-      <SafeAreaView style={{ flex: 1 }} edges={["top"]}>
+      <SafeAreaView style={{ flex: 1 }} edges={["top", "bottom"]}>
         <YStack flex={1}>
-          {/* Header - 10% */}
-          <YStack height="10%" justify="center">
-            <TopBar timeLabel={timeLabel} status={status} />
-          </YStack>
+          {/* TopBar — natural height */}
+          <TopBar timeLabel={timeLabel} status={status} />
 
-          {/* Video - 63% */}
-          <YStack height="65%" justify="center" alignItems="center" px="$2.5">
+          {/* Video — fills all remaining space */}
+          <YStack flex={1} px="$2" pb="$2">
             <YStack
-              width="100%"
-              height="100%"
-              maxWidth={420}
+              flex={1}
               bg="#020617"
               borderColor="rgba(255,255,255,0.06)"
               borderWidth={1}
@@ -289,16 +299,40 @@ function InterviewScreen() {
                 idleVideoUrl={interviewer?.idle_video_url ?? ""}
                 talkingVideoUrl={interviewer?.talking_video_url ?? ""}
               />
+
+              {/* Caption overlay — sliding window, Google Meet-style */}
+              {currentSentence ? (() => {
+                const CAPTION_WORD_LIMIT = 30;
+                const words = currentSentence.split(' ').filter(Boolean);
+                const displaySentence = words.length > CAPTION_WORD_LIMIT
+                  ? words.slice(-CAPTION_WORD_LIMIT).join(' ')
+                  : currentSentence;
+                return (
+                  <YStack
+                    position="absolute"
+                    bottom={0}
+                    left={0}
+                    right={0}
+                    bg="rgba(0,0,0,0.6)"
+                    px="$4"
+                    py="$3"
+                  >
+                    <Text
+                      color="white"
+                      fontSize="$4"
+                      fontWeight="500"
+                      textAlign="center"
+                    >
+                      {displaySentence}
+                    </Text>
+                  </YStack>
+                );
+              })() : null}
             </YStack>
           </YStack>
 
-          {/* Voice Transcript - 14% */}
-          <YStack height="14%" px="$4" justify="center" zIndex={999}>
-            <VoiceTranscript sentence={currentSentence} />
-          </YStack>
-
-          {/* Bottom Controls - 11% */}
-          <YStack height="11%" justify="center">
+          {/* Controls */}
+          <YStack py="$4" alignItems="center">
             <BottomControls
               isRecording={isRecording}
               onMicToggle={() =>
@@ -306,75 +340,82 @@ function InterviewScreen() {
               }
               onEnd={endInterview}
               speakerOn={speakerOn}
-              onSpeakerToggle={() => setSpeakerOn((s) => !s)}
+              onSpeakerToggle={toggleSpeaker}
             />
           </YStack>
         </YStack>
       </SafeAreaView>
 
+      {/* Completion overlay — themed with frosted glass card */}
       {isCompleted && (
-        <View style={styles.overlay}>
-          <View style={styles.card}>
-            <Text style={styles.checkmark}>✓</Text>
-            <Text style={styles.title}>Interview Complete</Text>
-            <Text style={styles.subtitle}>
-              Your report will be emailed to you shortly.
-            </Text>
-            <Pressable style={styles.button} onPress={() => router.back()}>
-              <Text style={styles.buttonText}>Back to Home</Text>
-            </Pressable>
-          </View>
-        </View>
+        <YStack
+          position="absolute"
+          top={0}
+          bottom={0}
+          left={0}
+          right={0}
+          bg="rgba(0,0,0,0.8)"
+          alignItems="center"
+          justifyContent="center"
+          zIndex={999}
+        >
+          <YStack
+            bg="rgba(255,255,255,0.06)"
+            borderColor="rgba(255,255,255,0.12)"
+            borderWidth={1}
+            borderRadius="$6"
+            p="$6"
+            alignItems="center"
+            width="80%"
+            gap="$4"
+            shadowColor="black"
+            shadowOpacity={0.35}
+            shadowRadius={20}
+            shadowOffset={{ width: 0, height: 10 }}
+          >
+            {/* Checkmark circle */}
+            <YStack
+              width={64}
+              height={64}
+              borderRadius={32}
+              bg="rgba(52,211,153,0.15)"
+              borderWidth={2}
+              borderColor="#34d399"
+              alignItems="center"
+              justifyContent="center"
+            >
+              <Text color="#34d399" fontSize={28} fontWeight="700">
+                ✓
+              </Text>
+            </YStack>
+
+            <YStack gap="$2" alignItems="center">
+              <Text color="#f8fafc" fontSize={20} fontWeight="700">
+                Interview Complete
+              </Text>
+              <Text
+                color="#94a3b8"
+                fontSize={14}
+                textAlign="center"
+                lineHeight={20}
+              >
+                Your report will be emailed to you shortly.
+              </Text>
+            </YStack>
+
+            <Button
+              bg="#34d399"
+              color="#022c22"
+              fontWeight="700"
+              borderRadius="$5"
+              pressStyle={{ scale: 0.97, bg: "#2dd4bf" }}
+              onPress={() => router.back()}
+            >
+              Back to Home
+            </Button>
+          </YStack>
+        </YStack>
       )}
     </LinearGradient>
   );
 }
-
-const styles = StyleSheet.create({
-  overlay: {
-    ...StyleSheet.absoluteFillObject,
-    backgroundColor: "rgba(0,0,0,0.75)",
-    alignItems: "center",
-    justifyContent: "center",
-    zIndex: 999,
-  },
-  card: {
-    backgroundColor: "#0f172a",
-    borderRadius: 20,
-    paddingVertical: 40,
-    paddingHorizontal: 32,
-    alignItems: "center",
-    width: "80%",
-    borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.08)",
-  },
-  checkmark: {
-    fontSize: 48,
-    color: "#34d399",
-    marginBottom: 12,
-  },
-  title: {
-    fontSize: 22,
-    fontWeight: "700",
-    color: "#f1f5f9",
-    marginBottom: 8,
-  },
-  subtitle: {
-    fontSize: 14,
-    color: "#94a3b8",
-    textAlign: "center",
-    lineHeight: 20,
-    marginBottom: 32,
-  },
-  button: {
-    backgroundColor: "#34d399",
-    paddingVertical: 14,
-    paddingHorizontal: 32,
-    borderRadius: 12,
-  },
-  buttonText: {
-    color: "#022c22",
-    fontWeight: "700",
-    fontSize: 15,
-  },
-});

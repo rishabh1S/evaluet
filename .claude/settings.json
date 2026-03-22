@@ -1,0 +1,11 @@
+{
+  "permissions": {
+    "deny": [
+      "Read(./.env)",
+      "Read(./secrets/**)"
+    ]
+  },
+  "bash": {
+    "deny": ["*/.env*", "grep * .env*", "cat .env*"]
+  }
+}
