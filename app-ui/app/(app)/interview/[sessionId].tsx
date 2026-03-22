@@ -1,7 +1,8 @@
-import { useLocalSearchParams } from "expo-router";
+import { useLocalSearchParams, useRouter } from "expo-router";
 import { YStack } from "tamagui";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useEffect, useRef, useState } from "react";
+import { StyleSheet, View, Pressable, Text } from "react-native";
 import { useKeepAwake } from "expo-keep-awake";
 import { LinearGradient } from "expo-linear-gradient";
 import { WS_BASE } from "../../../lib/env";
@@ -31,14 +32,17 @@ export default function InterviewScreenWrapper() {
 /* ---------------- Main Screen ---------------- */
 
 function InterviewScreen() {
+  const router = useRouter();
   const [currentSentence, setCurrentSentence] = useState("");
   const [speakerOn, setSpeakerOn] = useState(true);
+  const [isCompleted, setIsCompleted] = useState(false);
   const currentSound = useRef<Audio.Sound | null>(null);
   const { sessionId } = useLocalSearchParams();
   const ws = useRef<WebSocket | null>(null);
   const [status, setStatus] = useState("Connecting…");
   const [seconds, setSeconds] = useState(0);
   const [isRecording, setIsRecording] = useState(false);
+  const isRecordingRef = useRef(false);
   const micStartedRef = useRef(false);
   const interviewEndedRef = useRef(false);
   const audioBufferRef = useRef<Uint8Array[]>([]);
@@ -49,6 +53,16 @@ function InterviewScreen() {
   const videoStageRef = useRef<InterviewerVideoStageRef>(null);
 
   useKeepAwake();
+
+  useEffect(() => {
+    Audio.setAudioModeAsync({
+      allowsRecordingIOS: true,
+      playsInSilentModeIOS: true,
+      staysActiveInBackground: false,
+      shouldDuckAndroid: true,
+      playThroughEarpieceAndroid: false,
+    });
+  }, []);
 
   const { startRecording, stopRecording } = useSharedAudioRecorder();
 
@@ -96,6 +110,7 @@ function InterviewScreen() {
           clearInterviewer();
           stopRecordingSafe();
           setIsRecording(false);
+          setIsCompleted(true);
           return;
         }
       }
@@ -126,7 +141,7 @@ function InterviewScreen() {
   }, []);
 
   async function startRecordingSafe() {
-    if (isRecording) return;
+    if (isRecordingRef.current) return;
 
     await startRecording({
       sampleRate: 16000,
@@ -147,11 +162,13 @@ function InterviewScreen() {
       },
     });
 
+    isRecordingRef.current = true;
     setIsRecording(true);
   }
 
   async function stopRecordingSafe() {
-    if (!isRecording) return;
+    if (!isRecordingRef.current) return;
+    isRecordingRef.current = false;
     await stopRecording();
     setIsRecording(false);
   }
@@ -234,7 +251,8 @@ function InterviewScreen() {
       JSON.stringify({ type: "control", action: "END_INTERVIEW" })
     );
     ws.current?.close();
-  } 
+    setIsCompleted(true);
+  }
 
   return (
     <LinearGradient
@@ -268,8 +286,8 @@ function InterviewScreen() {
             >
               <InterviewerVideoStage
                 ref={videoStageRef}
-                idleVideoUrl={interviewer?.idle_video_url!}
-                talkingVideoUrl={interviewer?.talking_video_url!}
+                idleVideoUrl={interviewer?.idle_video_url ?? ""}
+                talkingVideoUrl={interviewer?.talking_video_url ?? ""}
               />
             </YStack>
           </YStack>
@@ -293,6 +311,70 @@ function InterviewScreen() {
           </YStack>
         </YStack>
       </SafeAreaView>
+
+      {isCompleted && (
+        <View style={styles.overlay}>
+          <View style={styles.card}>
+            <Text style={styles.checkmark}>✓</Text>
+            <Text style={styles.title}>Interview Complete</Text>
+            <Text style={styles.subtitle}>
+              Your report will be emailed to you shortly.
+            </Text>
+            <Pressable style={styles.button} onPress={() => router.back()}>
+              <Text style={styles.buttonText}>Back to Home</Text>
+            </Pressable>
+          </View>
+        </View>
+      )}
     </LinearGradient>
   );
 }
+
+const styles = StyleSheet.create({
+  overlay: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: "rgba(0,0,0,0.75)",
+    alignItems: "center",
+    justifyContent: "center",
+    zIndex: 999,
+  },
+  card: {
+    backgroundColor: "#0f172a",
+    borderRadius: 20,
+    paddingVertical: 40,
+    paddingHorizontal: 32,
+    alignItems: "center",
+    width: "80%",
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.08)",
+  },
+  checkmark: {
+    fontSize: 48,
+    color: "#34d399",
+    marginBottom: 12,
+  },
+  title: {
+    fontSize: 22,
+    fontWeight: "700",
+    color: "#f1f5f9",
+    marginBottom: 8,
+  },
+  subtitle: {
+    fontSize: 14,
+    color: "#94a3b8",
+    textAlign: "center",
+    lineHeight: 20,
+    marginBottom: 32,
+  },
+  button: {
+    backgroundColor: "#34d399",
+    paddingVertical: 14,
+    paddingHorizontal: 32,
+    borderRadius: 12,
+  },
+  buttonText: {
+    color: "#022c22",
+    fontWeight: "700",
+    fontSize: 15,
+  },
+});

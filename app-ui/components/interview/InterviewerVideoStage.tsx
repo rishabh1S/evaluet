@@ -22,7 +22,7 @@ type Props = {
 };
 
 const CLIP_SIZE_MS = 6000;
-const FADE_MS = 80; // 👈 small enough to be imperceptible
+const FADE_MS = 80;
 
 export const InterviewerVideoStage = forwardRef<
   InterviewerVideoStageRef,
