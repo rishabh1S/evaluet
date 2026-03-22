@@ -197,6 +197,8 @@ export default function Auth() {
                         flex={1}
                         placeholder="Your name"
                         placeholderTextColor="rgba(255,255,255,0.2)"
+                        textContentType="name"
+                        autoComplete="name"
                         value={name}
                         onChangeText={setName}
                         color="white"

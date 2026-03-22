@@ -346,7 +346,7 @@ function InterviewScreen() {
         </YStack>
       </SafeAreaView>
 
-      {isCompleted && <CompletionOverlay onBack={() => router.back()} />}
+      {isCompleted && <CompletionOverlay onBack={() => router.replace("/(app)")} />}
     </LinearGradient>
   );
 }

@@ -15,8 +15,6 @@ export function DashboardHeader({ firstName, initials, onAvatarPress }: Props) {
       alignItems="center"
       justifyContent="space-between"
     >
-      <YStack width={44} />
-
       <YStack alignItems="center" gap={3}>
         <Text color="white" fontSize={22} fontWeight="800">
           Welcome back, {firstName}

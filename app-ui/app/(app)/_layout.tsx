@@ -49,6 +49,7 @@ export default function AppLayout() {
       <Stack.Screen name="index" options={{ headerShown: false }} />
       <Stack.Screen name="setup" options={{ headerShown: false }} />
       <Stack.Screen name="profile" options={{ headerShown: false }} />
+      <Stack.Screen name="interviews" options={{ headerShown: false }} />
       <Stack.Screen
         name="interview/[sessionId]"
         options={{ headerShown: false, gestureEnabled: false }}

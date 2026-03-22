@@ -7,7 +7,7 @@ type Props = {
 
 export function NewInterviewCard({ onPress }: Props) {
   return (
-    <YStack px={24} mb={20}>
+    <YStack px={24}>
       <YStack
         backgroundColor="rgba(255,255,255,0.05)"
         borderRadius={20}

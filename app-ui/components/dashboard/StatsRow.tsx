@@ -61,7 +61,7 @@ export function StatsRow({ stats }: Props) {
               fontSize={9}
               letterSpacing={0.5}
             >
-              this mo.
+              this month
             </Text>
           </YStack>
         </XStack>

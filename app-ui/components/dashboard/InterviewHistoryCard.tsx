@@ -2,7 +2,7 @@ import { XStack, YStack, Text } from "tamagui";
 import { CheckCircle, Clock, XCircle } from "@tamagui/lucide-icons";
 import type { InterviewHistoryItem } from "lib/hooks/useInterviewHistory";
 
-const STATUS_CONFIG = {
+export const STATUS_CONFIG = {
   COMPLETED: {
     label: "COMPLETED",
     color: "#22c55e",
@@ -23,7 +23,7 @@ const STATUS_CONFIG = {
   },
 } as const;
 
-function formatRelativeDate(isoDate: string | null): string {
+export function formatRelativeDate(isoDate: string | null): string {
   if (!isoDate) return "";
   const diff = Date.now() - new Date(isoDate).getTime();
   const days = Math.floor(diff / 86_400_000);

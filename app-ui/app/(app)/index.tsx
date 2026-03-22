@@ -1,4 +1,4 @@
-import { ScrollView } from "tamagui";
+import { ScrollView, YStack } from "tamagui";
 import { useRouter } from "expo-router";
 import { LinearGradient } from "expo-linear-gradient";
 import { SafeAreaView } from "react-native-safe-area-context";
@@ -36,17 +36,22 @@ export default function IndexScreen() {
           contentContainerStyle={{ paddingBottom: 48 }}
           showsVerticalScrollIndicator={false}
         >
-          <DashboardHeader
-            firstName={firstName}
-            initials={initials}
-            onAvatarPress={() => router.push("/(app)/profile")}
-          />
+          <YStack gap={24}>
+            <DashboardHeader
+              firstName={firstName}
+              initials={initials}
+              onAvatarPress={() => router.push("/(app)/profile")}
+            />
 
-          <PastInterviewsSection history={history} mt={16} />
+            <PastInterviewsSection
+              history={history}
+              onViewAll={() => router.push("/(app)/interviews")}
+            />
 
-          <NewInterviewCard onPress={() => router.push("/(app)/setup")} />
+            <NewInterviewCard onPress={() => router.push("/(app)/setup")} />
 
-          {stats && <StatsRow stats={stats} />}
+            {stats && <StatsRow stats={stats} />}
+          </YStack>
         </ScrollView>
       </SafeAreaView>
     </LinearGradient>
