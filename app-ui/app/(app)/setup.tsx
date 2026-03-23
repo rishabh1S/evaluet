@@ -33,7 +33,7 @@ const PURPLE = "#6366F1";
 const PURPLE_PRESS = "#4F52D9";
 const INPUT_BG = "rgba(255,255,255,0.06)";
 const INPUT_BORDER = "rgba(255,255,255,0.1)";
-const LEVELS = ["Intern", "Entry Level", "Junior", "Mid-Level", "Senior", "Lead", "Manager"];
+const LEVELS = ["Intern", "Associate", "Senior", "Lead", "Manager"];
 
 export default function SetupScreen() {
   const router = useRouter();

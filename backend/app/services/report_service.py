@@ -3,7 +3,7 @@ import re
 from groq import Groq
 from app.models.interview_sessions import InterviewSession
 from app.db import SessionLocal
-from app.config import settings 
+from app.config import settings
 from app.prompts.report import build_report_prompt
 from app.models.session_status import SessionStatus
 from app.models.interview_reports import InterviewReport
@@ -14,9 +14,17 @@ from app.models.interviewer_character import InterviewerCharacter
 client = Groq(api_key=settings.GROQ_API_KEY)
 mail_service = MailService()
 
+
+def _clamp_score(val, low=0, high=100) -> int:
+    try:
+        return max(low, min(high, int(val)))
+    except (TypeError, ValueError):
+        return 50
+
+
 async def generate_and_send_report(session_id: str):
     """
-    Generates an interview report using LLM and sends it via email.
+    Generates an interview report using LLM and sends it via email with PDF.
     """
     db = SessionLocal()
     try:
@@ -31,7 +39,7 @@ async def generate_and_send_report(session_id: str):
         if interview_session.status in [SessionStatus.COMPLETED, SessionStatus.FAILED]:
             print(f"Session {session_id} already {interview_session.status.value}, skipping")
             return
-        
+
         interview_report = db.query(InterviewReport).filter(InterviewReport.session_id == session_id).first()
 
         if not interview_report:
@@ -39,34 +47,32 @@ async def generate_and_send_report(session_id: str):
             db.add(interview_report)
             db.flush()
 
-        # 1. Sanitize Transcript    
+        # 1. Sanitize Transcript
         clean_transcript = []
         if isinstance(interview_session.transcript, list):
             for msg in interview_session.transcript:
-                # Ensure content is not None
                 content = msg.get("content", "")
                 role = msg.get("role", "unknown")
                 if content and content.strip() and role in ["user", "assistant"]:
                     speaker = "INTERVIEWER" if role == "assistant" else "CANDIDATE"
                     clean_transcript.append(f"{speaker}: {content.strip()}")
-        
+
         transcript_text = "\n\n".join(clean_transcript)
 
-        # 2. VALIDATION CHECK (Crucial Fix)
+        # 2. VALIDATION CHECK
         if not transcript_text.strip():
             print(f"Empty transcript after cleaning for {session_id}")
-            # Set a fallback status so we know it failed
             interview_session.status = SessionStatus.FAILED
             db.commit()
             return
-        
+
         if len(clean_transcript) < 3:
             print(f"Very short transcript ({len(clean_transcript)} messages) for {session_id}")
 
-        # 3. Generate Feedback (The "Brain")
+        # 3. Generate Feedback
         print(f"Generating report for {session_id}")
         print(f"Transcript: {len(transcript_text)} chars, {len(clean_transcript)} messages")
-        
+
         report_prompt = build_report_prompt(
             session=interview_session,
             transcript_text=transcript_text,
@@ -74,9 +80,9 @@ async def generate_and_send_report(session_id: str):
         )
 
         # 4. Call LLM to generate report
-        try: 
+        try:
             completion = client.chat.completions.create(
-                model="llama-3.3-70b-versatile", 
+                model="llama-3.3-70b-versatile",
                 messages=[{
                     "role": "system",
                     "content": (
@@ -97,22 +103,51 @@ async def generate_and_send_report(session_id: str):
             interview_session.status = SessionStatus.FAILED
             db.commit()
             return
-        
+
         # 5. Parse JSON response
         parsed_data = parse_llm_json(raw_response)
-        
+
         if not parsed_data:
             print(f"Failed to parse LLM response for {session_id}")
             interview_session.status = SessionStatus.FAILED
             db.commit()
             return
-        
+
+        # 6. Extract structured data
+        skill_scores_raw = parsed_data.get("skill_scores", {})
+        skill_scores = {
+            "technical_knowledge": _clamp_score(skill_scores_raw.get("technical_knowledge", 50)),
+            "communication": _clamp_score(skill_scores_raw.get("communication", 50)),
+            "problem_solving": _clamp_score(skill_scores_raw.get("problem_solving", 50)),
+            "confidence": _clamp_score(skill_scores_raw.get("confidence", 50)),
+        }
+
+        # Compute weighted overall score
+        overall_score = round(
+            skill_scores["technical_knowledge"] * 0.4
+            + skill_scores["communication"] * 0.2
+            + skill_scores["problem_solving"] * 0.3
+            + skill_scores["confidence"] * 0.1
+        )
+
+        strengths = parsed_data.get("strengths", [])
+        improvements = parsed_data.get("improvements", [])
+        hiring_decision = parsed_data.get("hiring_decision", "Maybe")
+        final_verdict = parsed_data.get("final_verdict", "")
+
+        # Validate hiring_decision
+        valid_decisions = {"Strong Hire", "Hire", "Maybe", "No Hire"}
+        if hiring_decision not in valid_decisions:
+            hiring_decision = "Maybe"
+
         # C. Save to DB
         try:
-            report = parsed_data.get("report_markdown", "").strip()
-            score = parsed_data.get("score")
-            interview_report.feedback_report = report
-            interview_report.score = score
+            interview_report.score = overall_score
+            interview_report.skill_scores = skill_scores
+            interview_report.strengths = strengths if isinstance(strengths, list) else []
+            interview_report.improvements = improvements if isinstance(improvements, list) else []
+            interview_report.hiring_decision = hiring_decision
+            interview_report.final_verdict = final_verdict
             interview_session.status = SessionStatus.COMPLETED
             db.commit()
             print(f"Report saved successfully for {session_id}")
@@ -122,7 +157,7 @@ async def generate_and_send_report(session_id: str):
             interview_session.status = SessionStatus.FAILED
             db.commit()
             raise
-        
+
         # D. Send Email
         user = db.query(User).filter(User.user_id == interview_session.user_id).first()
         if user and user.email:
@@ -130,13 +165,17 @@ async def generate_and_send_report(session_id: str):
                 await mail_service.send_interview_report(
                     recipient_email=user.email,
                     job_role=interview_session.job_role,
-                    report_markdown=interview_report.feedback_report,
-                    score=interview_report.score,
+                    score=overall_score,
+                    skill_scores=skill_scores,
+                    strengths=interview_report.strengths,
+                    improvements=interview_report.improvements,
+                    hiring_decision=hiring_decision,
+                    final_verdict=final_verdict,
                 )
                 print(f"Email sent to {user.email}")
             except Exception as mail_err:
                 print(f"Mail failed (non-fatal): {mail_err}")
-            
+
     except Exception as e:
         print(f"Unexpected error generating report for {session_id}: {e}")
         db.rollback()
@@ -166,7 +205,7 @@ def parse_llm_json(raw_content: str):
     try:
         # 2. dirtyjson handles invalid escapes like \' and missing trailing braces
         parsed = dirtyjson.loads(text)
-        
+
         # dirtyjson might return a AttributedDict; convert to standard dict
         if hasattr(parsed, "to_dict"):
             return parsed.to_dict()

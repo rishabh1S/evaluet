@@ -1,5 +1,5 @@
 import { useLocalSearchParams, useRouter } from "expo-router";
-import { Button, Text, YStack } from "tamagui";
+import { Text, YStack } from "tamagui";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useEffect, useRef, useState } from "react";
 import { useKeepAwake } from "expo-keep-awake";
@@ -11,7 +11,7 @@ import {
   useSharedAudioRecorder,
 } from "@siteed/expo-audio-studio";
 import { useInterviewerStore } from "lib/store/interviewerStore";
-import { BottomControls, TopBar } from "components/interview";
+import { BottomControls, TopBar, CompletionOverlay } from "components/interview";
 import { mergeUint8Arrays, pcmToWav } from "lib/utils/audioUtils";
 import {
   InterviewerVideoStage,
@@ -346,76 +346,7 @@ function InterviewScreen() {
         </YStack>
       </SafeAreaView>
 
-      {/* Completion overlay — themed with frosted glass card */}
-      {isCompleted && (
-        <YStack
-          position="absolute"
-          top={0}
-          bottom={0}
-          left={0}
-          right={0}
-          bg="rgba(0,0,0,0.8)"
-          alignItems="center"
-          justifyContent="center"
-          zIndex={999}
-        >
-          <YStack
-            bg="rgba(255,255,255,0.06)"
-            borderColor="rgba(255,255,255,0.12)"
-            borderWidth={1}
-            borderRadius="$6"
-            p="$6"
-            alignItems="center"
-            width="80%"
-            gap="$4"
-            shadowColor="black"
-            shadowOpacity={0.35}
-            shadowRadius={20}
-            shadowOffset={{ width: 0, height: 10 }}
-          >
-            {/* Checkmark circle */}
-            <YStack
-              width={64}
-              height={64}
-              borderRadius={32}
-              bg="rgba(52,211,153,0.15)"
-              borderWidth={2}
-              borderColor="#34d399"
-              alignItems="center"
-              justifyContent="center"
-            >
-              <Text color="#34d399" fontSize={28} fontWeight="700">
-                ✓
-              </Text>
-            </YStack>
-
-            <YStack gap="$2" alignItems="center">
-              <Text color="#f8fafc" fontSize={20} fontWeight="700">
-                Interview Complete
-              </Text>
-              <Text
-                color="#94a3b8"
-                fontSize={14}
-                textAlign="center"
-                lineHeight={20}
-              >
-                Your report will be emailed to you shortly.
-              </Text>
-            </YStack>
-
-            <Button
-              bg="#34d399"
-              color="#022c22"
-              fontWeight="700"
-              borderRadius="$5"
-              pressStyle={{ scale: 0.97, bg: "#2dd4bf" }}
-              onPress={() => router.back()}
-            >
-              Back to Home
-            </Button>
-          </YStack>
-        </YStack>
-      )}
+      {isCompleted && <CompletionOverlay onBack={() => router.replace("/(app)")} />}
     </LinearGradient>
   );
 }
