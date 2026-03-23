@@ -1,4 +1,3 @@
-from pathlib import Path
 from fastapi_mail import FastMail, MessageSchema, MessageType
 from app.core.mail import email_conf
 
@@ -31,7 +30,6 @@ class MailService:
         improvements: list[str],
         hiring_decision: str,
         final_verdict: str,
-        pdf_path: str | None = None,
     ):
         subject = f"Your Interview Report - {job_role}"
 
@@ -99,24 +97,18 @@ class MailService:
 
             <div style="background: #f8f9fa; padding: 20px; text-align: center; border-radius: 0 0 12px 12px;">
                 <p style="font-size: 12px; color: #999; margin: 0;">
-                    This report was generated automatically by Evaluet AI.<br/>
-                    A PDF copy is attached for your records.
+                    This report was generated automatically by Evaluet AI.
                 </p>
             </div>
         </body>
         </html>
         """
 
-        attachments = []
-        if pdf_path and Path(pdf_path).exists():
-            attachments.append(pdf_path)
-
         message = MessageSchema(
             subject=subject,
             recipients=[recipient_email],
             body=body,
             subtype=MessageType.html,
-            attachments=attachments,
         )
 
         await self.fm.send_message(message)

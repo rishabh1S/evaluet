@@ -2,7 +2,7 @@ import uuid
 import os
 from datetime import datetime, timezone
 from typing import List
-from fastapi import APIRouter, UploadFile, File, Form, Depends, HTTPException
+from fastapi import APIRouter, BackgroundTasks, UploadFile, File, Form, Depends, HTTPException
 from fastapi.responses import FileResponse
 from sqlalchemy import desc, func
 from sqlalchemy.orm import Session
@@ -10,7 +10,7 @@ from app.db import get_db
 from app.models.interview_sessions import InterviewSession
 from app.models.interview_reports import InterviewReport
 from app.services.pdf_service import extract_text_from_pdf
-from app.services.report_pdf_service import REPORTS_DIR
+from app.services.report_pdf_service import generate_report_pdf
 from app.models.users import User
 from app.auth.dependencies import get_current_user_id
 from app.models.interviewer_character import InterviewerCharacter
@@ -289,10 +289,6 @@ async def get_report(
                     "text": content.strip(),
                 })
 
-    # Check if PDF exists on disk
-    pdf_file = os.path.join(REPORTS_DIR, f"report_{session_id}.pdf")
-    has_pdf = os.path.exists(pdf_file)
-
     return {
         "session_id": session_id,
         "score": report.score,
@@ -306,20 +302,19 @@ async def get_report(
         "created_at": interview_session.created_at.isoformat() if interview_session.created_at else None,
         "interviewer_name": interviewer_name,
         "transcript": transcript,
-        "has_pdf": has_pdf,
     }
 
 
 @router.get("/report/{session_id}/pdf")
 async def download_report_pdf(
     session_id: str,
+    background_tasks: BackgroundTasks,
     token: str | None = None,
     user_id: str | None = Depends(_optional_user_id),
     db: Session = Depends(get_db),
 ):
     # Support token as query param for mobile deep links (Linking.openURL can't set headers)
     if not user_id and token:
-        from jose import jwt, JWTError
         from app.config import settings as app_settings
         try:
             payload = jwt.decode(token, app_settings.JWT_SECRET, algorithms=["HS256"])
@@ -330,20 +325,58 @@ async def download_report_pdf(
     if not user_id:
         raise HTTPException(401, "Authentication required")
 
-    session = db.query(InterviewSession).filter(
-        InterviewSession.session_id == session_id,
-        InterviewSession.user_id == user_id,
-    ).first()
+    session_row = (
+        db.query(
+            InterviewSession,
+            InterviewerCharacter.name.label("interviewer_name"),
+        )
+        .join(
+            InterviewerCharacter,
+            InterviewSession.interviewer_id == InterviewerCharacter.id,
+            isouter=True,
+        )
+        .filter(
+            InterviewSession.session_id == session_id,
+            InterviewSession.user_id == user_id,
+        )
+        .first()
+    )
 
-    if not session:
+    if not session_row:
         raise HTTPException(404, "Session not found")
 
-    pdf_file = os.path.join(REPORTS_DIR, f"report_{session_id}.pdf")
-    if not os.path.exists(pdf_file):
-        raise HTTPException(404, "PDF not available")
+    interview_session = session_row[0]
+    interviewer_name = session_row.interviewer_name or "AI Interviewer"
+
+    report = db.query(InterviewReport).filter(
+        InterviewReport.session_id == session_id
+    ).first()
+
+    if not report:
+        raise HTTPException(404, "Report not yet generated")
+
+    created_at_str = interview_session.created_at.strftime("%B %d, %Y") if interview_session.created_at else ""
+
+    # Generate PDF on the spot
+    pdf_path = generate_report_pdf(
+        session_id=session_id,
+        score=report.score,
+        skill_scores=report.skill_scores or {},
+        strengths=report.strengths or [],
+        improvements=report.improvements or [],
+        hiring_decision=report.hiring_decision or "N/A",
+        final_verdict=report.final_verdict or "",
+        job_role=interview_session.job_role,
+        candidate_level=interview_session.candidate_level,
+        interviewer_name=interviewer_name,
+        created_at=created_at_str,
+    )
+
+    # Clean up temp file after response is sent
+    background_tasks.add_task(os.unlink, pdf_path)
 
     return FileResponse(
-        pdf_file,
+        pdf_path,
         media_type="application/pdf",
         filename=f"evaluet_report_{session_id[:8]}.pdf",
     )

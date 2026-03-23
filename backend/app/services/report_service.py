@@ -1,4 +1,3 @@
-import asyncio
 import dirtyjson
 import re
 from groq import Groq
@@ -9,7 +8,6 @@ from app.prompts.report import build_report_prompt
 from app.models.session_status import SessionStatus
 from app.models.interview_reports import InterviewReport
 from app.services.mail_service import MailService
-from app.services.report_pdf_service import generate_report_pdf
 from app.models.users import User
 from app.models.interviewer_character import InterviewerCharacter
 
@@ -160,31 +158,7 @@ async def generate_and_send_report(session_id: str):
             db.commit()
             raise
 
-        # D. Generate PDF
-        interviewer_name = interviewer.name if interviewer else "AI Interviewer"
-        created_at_str = interview_session.created_at.strftime("%B %d, %Y") if interview_session.created_at else ""
-
-        try:
-            pdf_path = await asyncio.to_thread(
-                generate_report_pdf,
-                session_id=session_id,
-                score=overall_score,
-                skill_scores=skill_scores,
-                strengths=interview_report.strengths,
-                improvements=interview_report.improvements,
-                hiring_decision=hiring_decision,
-                final_verdict=final_verdict,
-                job_role=interview_session.job_role,
-                candidate_level=interview_session.candidate_level,
-                interviewer_name=interviewer_name,
-                created_at=created_at_str,
-            )
-            print(f"PDF generated at {pdf_path}")
-        except Exception as pdf_err:
-            print(f"PDF generation failed (non-fatal): {pdf_err}")
-            pdf_path = None
-
-        # E. Send Email
+        # D. Send Email
         user = db.query(User).filter(User.user_id == interview_session.user_id).first()
         if user and user.email:
             try:
@@ -197,7 +171,6 @@ async def generate_and_send_report(session_id: str):
                     improvements=interview_report.improvements,
                     hiring_decision=hiring_decision,
                     final_verdict=final_verdict,
-                    pdf_path=pdf_path,
                 )
                 print(f"Email sent to {user.email}")
             except Exception as mail_err:

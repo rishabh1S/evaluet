@@ -143,7 +143,7 @@ export default function ReportScreen() {
       const url = `${API_BASE}/api/interview/report/${sessionId}/pdf?token=${token}`;
       await Linking.openURL(url);
     } catch {
-      Alert.alert("Error", "Could not open the report.");
+      Alert.alert("Error", "Could not download the report.");
     } finally {
       setDownloading(false);
     }
@@ -463,8 +463,7 @@ export default function ReportScreen() {
               borderColor="rgba(255,255,255,0.15)"
               pressStyle={{ backgroundColor: "rgba(255,255,255,0.08)" }}
               onPress={handleDownloadPdf}
-              disabled={downloading || !data.has_pdf}
-              opacity={data.has_pdf ? 1 : 0.4}
+              disabled={downloading}
               icon={
                 downloading ? (
                   <Spinner size="small" color="white" />

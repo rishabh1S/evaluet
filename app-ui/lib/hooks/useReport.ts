@@ -27,7 +27,6 @@ export type ReportData = {
   created_at: string | null;
   interviewer_name: string | null;
   transcript: TranscriptMessage[];
-  has_pdf: boolean;
 };
 
 async function fetchReport(sessionId: string): Promise<ReportData> {
