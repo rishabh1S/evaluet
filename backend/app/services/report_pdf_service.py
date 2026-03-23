@@ -62,7 +62,6 @@ def generate_report_pdf(
     interviewer_name: str,
     created_at: str,
 ) -> str:
-    os.makedirs(REPORTS_DIR, exist_ok=True)
     pw = 210  # A4 width
     margin = 15
     content_w = pw - 2 * margin
